@@ -1,32 +1,33 @@
 name: feelchecker
+
 on:
-  workflow_dispatch:
-  push:
-    branches: [main]
+  workflow_dispatch:  # 手動実行のみ
 
 jobs:
-  run:
-    runs-on: ubuntu-latest
-
+  run-check:
+    runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11.9'
+          python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install Python dependencies
+        run: pip install --user playwright httpx beautifulsoup4
+
+      - name: Install Playwright browsers
         run: |
-          pip install -r requirements.txt
-          pip install playwright
-          python -m playwright install --with-deps
+          python -m playwright install chromium firefox webkit
 
-      - name: Run feelchecker
+      - name: Run feelchecker.py
         env:
           FEEL_USER: ${{ secrets.FEEL_USER }}
           FEEL_PASS: ${{ secrets.FEEL_PASS }}
           SHEET_CSV: ${{ secrets.SHEET_CSV }}
           CH_ACCESS: ${{ secrets.CH_ACCESS }}
-          DEBUG: "1"
-        run: python feelchecker.py
+          DEBUG: '1'  # デバッグ時のみ1、普段は0
+        run: |
+          python3.11 ./feelchecker.py
