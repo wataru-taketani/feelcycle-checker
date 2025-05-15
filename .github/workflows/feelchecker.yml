@@ -23,7 +23,8 @@ jobs:
         shell: bash
         run: |
           echo "len=$(echo -n "$SHEET_CSV" | wc -c) bytes"
-          echo "raw=$(printf %q "$SHEET_CSV")"
+          printf 'hex ='
+          echo -n "$SHEET_CSV" | od -An -tx1 | head -n 1
 
       # ④ CSV 先頭 2 行を表示
       - name: Check CSV head
