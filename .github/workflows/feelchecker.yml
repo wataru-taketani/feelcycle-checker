@@ -1,28 +1,28 @@
 name: feelchecker
 
 on:
-  workflow_dispatch:  # 手動実行用トリガー
+  workflow_dispatch:  # 手動実行用（必要なら schedule にも変更可）
 
 jobs:
   run-checker:
-    runs-on: self-hosted  # 自前ランナーで実行
+    runs-on: self-hosted
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      - name: Use Python 3.11
+        run: |
+          python3.11 --version
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt  # 必要な場合のみ
+          python3.11 -m pip install --upgrade pip
+          python3.11 -m pip install -r requirements.txt
 
       - name: Run feelchecker.py
         run: |
-          python feelchecker.py
+          python3.11 feelchecker.py
         env:
           FEEL_USER: ${{ secrets.FEEL_USER }}
           FEEL_PASS: ${{ secrets.FEEL_PASS }}
