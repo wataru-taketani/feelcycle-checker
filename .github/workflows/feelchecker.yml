@@ -1,24 +1,45 @@
-# .github/workflows/feelchecker.yml
 name: feelchecker
 
 on:
-  workflow_dispatch:  # 手動実行のみ。定期実行やpushトリガーは適宜変更可
+  workflow_dispatch:
 
 jobs:
-  run:
-    runs-on: [self-hosted, linux]  # EC2ランナーにマッチさせる（タグは自分の設定に応じて）
+  run-feelchecker:
+    runs-on: ubuntu-latest
     steps:
-      - name: リポジトリをチェックアウト
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Python依存パッケージ（必要なら）
-        run: pip3 install --user playwright httpx beautifulsoup4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-      - name: feelchecker.py を実行
+      - name: Install system dependencies for Playwright
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libnss3 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 \
+            libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 \
+            libasound2 libpangocairo-1.0-0 libpango-1.0-0 libcairo2 libatspi2.0-0 \
+            libgtk-3-0 libxss1 libx11-xcb1 libxtst6 libwoff1 libenchant-2-2 \
+            libhyphen0 libjpeg-turbo8 libopus0 libvpx7 libpcre3 libffi8
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright httpx beautifulsoup4
+
+      - name: Install Playwright Browsers
+        run: |
+          python -m playwright install
+
+      - name: Run feelchecker.py
         env:
           FEEL_USER: ${{ secrets.FEEL_USER }}
           FEEL_PASS: ${{ secrets.FEEL_PASS }}
           SHEET_CSV: ${{ secrets.SHEET_CSV }}
           CH_ACCESS: ${{ secrets.CH_ACCESS }}
-          DEBUG: "1"   # デバッグなら1、本番運用時は0
-        run: python3 feelchecker.py
+          DEBUG: "1"
+        run: |
+          python feelchecker.py
