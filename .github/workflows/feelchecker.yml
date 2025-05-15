@@ -23,7 +23,7 @@ jobs:
             libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 \
             libasound2 libpangocairo-1.0-0 libpango-1.0-0 libcairo2 libatspi2.0-0 \
             libgtk-3-0 libxss1 libx11-xcb1 libxtst6 libwoff1 libenchant-2-2 \
-            libhyphen0 libjpeg-turbo8 libopus0 libvpx6 libpcre3 libffi8
+            libhyphen0 libjpeg-turbo8 libopus0 libpcre3 libffi8
 
       - name: Install Python dependencies
         run: |
