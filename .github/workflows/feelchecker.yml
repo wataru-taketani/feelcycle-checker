@@ -14,7 +14,7 @@ jobs:
     - name: Set up Python 3.11
       uses: actions/setup-python@v5
       with:
-        python-version: 3.11
+        python-version: '3.11'
 
     - name: Install Python dependencies
       run: |
@@ -25,11 +25,12 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ~/.cache/ms-playwright
-        key: ${{ runner.os }}-playwright
+        key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-playwright-
 
     - name: Install Playwright browsers
-      run: |
-        npx playwright install
+      run: npx playwright install
 
     - name: Run feelchecker.py
       env:
@@ -38,5 +39,4 @@ jobs:
         SHEET_CSV: ${{ secrets.SHEET_CSV }}
         CH_ACCESS: ${{ secrets.CH_ACCESS }}
         DEBUG: 1
-      run: |
-        python3.11 feelchecker.py
+      run: python3.11 feelchecker.py
