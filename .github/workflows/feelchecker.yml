@@ -1,0 +1,25 @@
+name: feelchecker
+on:
+  schedule:
+    - cron: '*/15 * * * *'    # 15 分ごと
+  workflow_dispatch:          # 手動実行も可
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Playwright と依存ライブラリをインストール
+      - uses: microsoft/playwright-github-action@v1
+
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+
+      - name: Run feelchecker
+        env:
+          FEEL_USER:   ${{ secrets.FEEL_USER }}
+          FEEL_PASS:   ${{ secrets.FEEL_PASS }}
+          SHEET_CSV:   ${{ secrets.SHEET_CSV }}
+          CH_ACCESS:   ${{ secrets.CH_ACCESS }}
+          USER_ID:     ${{ secrets.USER_ID }}
+        run: python feelchecker.py
