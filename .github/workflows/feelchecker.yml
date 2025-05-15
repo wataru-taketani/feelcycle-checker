@@ -15,15 +15,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install system dependencies for Playwright
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libnss3 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 \
-            libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 \
-            libasound2 libpangocairo-1.0-0 libpango-1.0-0 libcairo2 libatspi2.0-0 \
-            libgtk-3-0 libxss1 libx11-xcb1 libxtst6 libwoff1 libenchant-2-2 \
-            libhyphen0 libjpeg-turbo8 libopus0 libpcre3 libffi8
+      - name: Install Playwright dependencies (auto)
+        run: npx playwright install-deps
 
       - name: Install Python dependencies
         run: |
