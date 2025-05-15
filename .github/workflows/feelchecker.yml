@@ -48,3 +48,6 @@ jobs:
       # 本処理
       - name: Run feelchecker
         run: python feelchecker.py
+
+      env:
+        DEBUG: "1"
