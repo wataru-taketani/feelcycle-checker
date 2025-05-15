@@ -47,7 +47,7 @@ async def fetch_reserve_html() -> str:
             "Chrome/124.0.0.0 Safari/537.36"
         )
         browser = await p.chromium.launch(
-            headless=False,  # headless=Falseで突破率UP（CIでもOK）
+            headless=True,  # headless=Falseで突破率UP（CIでもOK）
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
