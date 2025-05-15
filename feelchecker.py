@@ -1,22 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-feelchecker.py – FEELCYCLE 予約監視 ＋ LINE 通知（Playwright 版）
-────────────────────────────────────────
-環境変数（GitHub-Actions → Secrets）  
-  FEEL_USER   : FEELCYCLE 登録メールアドレス  
-  FEEL_PASS   : FEELCYCLE パスワード  
-  SHEET_CSV   : 公開 CSV の URL  (…/export?format=csv&gid=0)  
-  CH_ACCESS   : LINE Messaging API  チャネルアクセストークン  
-  DEBUG       : 1 を入れるとデバッグログ多め  
+feelchecker.py – FEELCYCLE 予約監視 ＋ LINE 通知（Playwright, CF-wait）
 """
-import asyncio, csv, os, re
+import asyncio, csv, os, re, sys, time
 from typing import List, Tuple
 
 import httpx
 from bs4 import BeautifulSoup
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, TimeoutError as PWTimeout
 
+# ───── 環境変数 ─────
 FEEL_USER  = os.environ["FEEL_USER"]
 FEEL_PASS  = os.environ["FEEL_PASS"]
 SHEET_CSV  = os.environ["SHEET_CSV"]
@@ -24,21 +18,16 @@ CH_ACCESS  = os.environ["CH_ACCESS"]
 DEBUG      = bool(int(os.getenv("DEBUG", "0")))
 
 # ──────────────────────────────────────────
-# 1. Google シート（CSV）を取得
-# ──────────────────────────────────────────
 async def fetch_csv(url: str) -> List[Tuple[str, str, str, str]]:
-    async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
-        r = await client.get(url)
+    async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as c:
+        r = await c.get(url)
     r.raise_for_status()
-
     if r.text.lstrip().startswith("<"):
-        raise RuntimeError(
-            "CSV ではなく HTML が返りました。シートの公開設定を「リンクを知っている全員 ▶︎ 閲覧者」にしてください。"
-        )
+        raise RuntimeError("CSV ではなく HTML が返りました。公開設定を確認してください。")
 
-    rows: List[Tuple[str, str, str, str]] = []
+    rows = []
     for row in csv.reader(r.text.splitlines()):
-        if not row or row[0].lower() == "date":      # ヘッダー／空行 skip
+        if not row or row[0].lower() == "date":
             continue
         date_, time_, studio_ = row[:3]
         user_id = row[3] if len(row) > 3 else ""
@@ -46,30 +35,37 @@ async def fetch_csv(url: str) -> List[Tuple[str, str, str, str]]:
     return rows
 
 # ──────────────────────────────────────────
-# 2. Playwright で予約ページ HTML を取得
-# ──────────────────────────────────────────
 RESERVE_URL = "https://m.feelcycle.com/reserve?type=filter"
 TIME_RE     = re.compile(r"\d{2}:\d{2}")
 
 async def fetch_reserve_html() -> str:
     async with async_playwright() as p:
         browser = await p.webkit.launch(headless=True)
-        context = await browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
-                "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
-            )
+        ctx = await browser.new_context(
+            user_agent=("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+                        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1")
         )
-        page = await context.new_page()
+        page = await ctx.new_page()
+        page.set_default_timeout(60_000)          # 60 s
 
-        # ① ログイン画面へ
         await page.goto("https://m.feelcycle.com/login")
-        await page.fill('input[name="email"]', FEEL_USER)
+
+        # ── Cloudflare 待ち受けループ ──
+        for _ in range(12):                       # 最大 12×5 = 60 秒
+            try:
+                await page.wait_for_selector('input[name="email"], input[type="email"]', timeout=5_000)
+                break
+            except PWTimeout:
+                if DEBUG: print("[DEBUG] CF チェックを待機中…")
+        else:
+            raise RuntimeError("Cloudflare チェックが解除されずタイムアウトしました。")
+
+        # フォーム入力
+        await page.fill('input[name="email"], input[type="email"]', FEEL_USER)
         await page.fill('input[name="password"]', FEEL_PASS)
         await page.click('button[type="submit"]')
         await page.wait_for_load_state("networkidle")
 
-        # ② 予約ページへ遷移
         await page.goto(RESERVE_URL)
         await page.wait_for_load_state("networkidle")
         html = await page.content()
@@ -77,71 +73,51 @@ async def fetch_reserve_html() -> str:
         return html
 
 # ──────────────────────────────────────────
-# 3. HTML から指定枠の空き判定
-# ──────────────────────────────────────────
 def has_slot(html: str, date_: str, time_: str) -> bool:
     soup = BeautifulSoup(html, "html.parser")
-
-    # 日付列
     day_div = soup.find("div", class_="days", string=lambda s: s and date_ in s)
     if not day_div:
-        if DEBUG:
-            print(f"[DEBUG] {date_} の列が見つかりません")
+        if DEBUG: print(f"[DEBUG] {date_} 列なし")
         return False
-    column = day_div.find_parent("div", class_="content")
-    if not column:
-        return False
-
-    # 予約可 or 予約済み (= seat-available / seat-reserved)
+    column = day_div.find_parent("div", class_="content") or day_div
     for lesson in column.find_all("div", class_=re.compile(r"seat-(available|reserved)")):
-        time_div = lesson.find("div", class_="time")
-        if not time_div:
-            continue
-        m = TIME_RE.match(time_div.get_text(strip=True))
+        m = TIME_RE.match(lesson.find("div", class_="time").get_text(strip=True))
         if m and m.group() == time_:
             return True
     return False
 
 # ──────────────────────────────────────────
-# 4. LINE Push
-# ──────────────────────────────────────────
 async def push_line(text: str, user_id: str):
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        await client.post(
+    async with httpx.AsyncClient(timeout=10.0) as c:
+        await c.post(
             "https://api.line.me/v2/bot/message/push",
-            headers={
-                "Authorization": f"Bearer {CH_ACCESS}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "to": user_id,
-                "messages": [{"type": "text", "text": text}],
-            },
+            headers={"Authorization": f"Bearer {CH_ACCESS}", "Content-Type": "application/json"},
+            json={"to": user_id, "messages": [{"type": "text", "text": text}]},
         )
 
 # ──────────────────────────────────────────
-# 5. メイン
-# ──────────────────────────────────────────
 async def main():
-    watch_list = await fetch_csv(SHEET_CSV)
-    print(f"監視対象: {len(watch_list)} 行")
-
-    if not watch_list:
+    watch = await fetch_csv(SHEET_CSV)
+    print("監視対象:", len(watch))
+    if not watch:
         return
 
     html = await fetch_reserve_html()
     sent = 0
-
-    for date_, time_, studio_, user_id in watch_list:
-        if has_slot(html, date_, time_):
-            msg = f"{date_} {time_} {studio_} が予約可能です！"
+    for d, t, s, uid in watch:
+        if has_slot(html, d, t):
+            msg = f"{d} {t} {s} が予約可能です！"
             print("通知:", msg)
-            await push_line(msg, user_id)
+            await push_line(msg, uid)
             sent += 1
         elif DEBUG:
-            print(f"[DEBUG] {date_} {time_} は満席 / 列なし")
+            print(f"[DEBUG] {d} {t} 満席")
 
-    print(f"通知件数: {sent}")
+    print("通知件数:", sent)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        print("‼️   ERROR:", e)
+        sys.exit(1)
