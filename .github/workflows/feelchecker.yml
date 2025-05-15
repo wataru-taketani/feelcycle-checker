@@ -1,35 +1,24 @@
+# .github/workflows/feelchecker.yml
 name: feelchecker
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # 手動実行のみ。定期実行やpushトリガーは適宜変更可
 
 jobs:
-  run-feelchecker:
-    runs-on: ubuntu-latest
+  run:
+    runs-on: [self-hosted, linux]  # EC2ランナーにマッチさせる（タグは自分の設定に応じて）
     steps:
-      - name: Checkout repository
+      - name: リポジトリをチェックアウト
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      - name: Python依存パッケージ（必要なら）
+        run: pip3 install --user playwright httpx beautifulsoup4
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install playwright httpx beautifulsoup4
-
-      - name: Install Playwright Browsers
-        run: |
-          python -m playwright install
-
-      - name: Run feelchecker.py
+      - name: feelchecker.py を実行
         env:
           FEEL_USER: ${{ secrets.FEEL_USER }}
           FEEL_PASS: ${{ secrets.FEEL_PASS }}
           SHEET_CSV: ${{ secrets.SHEET_CSV }}
           CH_ACCESS: ${{ secrets.CH_ACCESS }}
-          DEBUG: "1"              # ← ここを直書き！
-        run: |
-          python feelchecker.py
+          DEBUG: "1"   # デバッグなら1、本番運用時は0
+        run: python3 feelchecker.py
