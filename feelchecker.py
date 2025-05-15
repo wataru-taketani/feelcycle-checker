@@ -1,3 +1,16 @@
+# ───── デバッグ：取得した CSV の 100 文字だけ表示 ─────
+import httpx, os, sys, io, csv
+csv_raw = httpx.get(os.getenv("SHEET_CSV"), timeout=10).text
+print("▼CSV 先頭 100 文字▼")
+print(csv_raw[:100].encode("unicode_escape").decode())
+print("▲ここまで▲")
+
+rows = list(csv.reader(io.StringIO(csv_raw)))
+print("行数:", len(rows))
+if rows:
+    print("1 行目:", rows[0])
+# ───── ここまで追加 ─────
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
