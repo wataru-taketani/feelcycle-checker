@@ -1,8 +1,6 @@
 name: feelchecker
 
 on:
-  schedule:
-    - cron: '0 21 * * *'  # JST 6:00 に相当（UTCで指定）
   workflow_dispatch:
 
 jobs:
@@ -13,7 +11,7 @@ jobs:
       FEEL_USER: ${{ secrets.FEEL_USER }}
       FEEL_PASS: ${{ secrets.FEEL_PASS }}
       LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
-      SHEET_CSV: dummy.csv  # 使用してなければこのままでOK
+      SHEET_CSV: dummy.csv
       CH_ACCESS: 1
       DEBUG: 1
 
@@ -21,16 +19,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-          playwright install  # ← これが重要！
+          python3.11 -m pip install --upgrade pip
+          python3.11 -m pip install -r requirements.txt
+          python3.11 -m playwright install
 
       - name: Run feelchecker.py
-        run: python feelchecker.py
+        run: python3.11 feelchecker.py
