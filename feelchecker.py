@@ -46,26 +46,28 @@ async def fetch_reserve_html() -> str:
                         "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1")
         )
         page = await ctx.new_page()
-        page.set_default_timeout(60_000)          # 60 s
+        page.set_default_timeout(60_000)  # 60秒
 
         await page.goto("https://m.feelcycle.com/login")
 
-        # ── Cloudflare 待ち受けループ ──
-        for _ in range(12):                       # 最大 12×5 = 60 秒
+        # ── Cloudflare チェックを待つ ──
+        for _ in range(12):  # 最大 12×5秒 = 60秒
             try:
                 await page.wait_for_selector('input[name="email"], input[type="email"]', timeout=5_000)
                 break
             except PWTimeout:
-                if DEBUG: print("[DEBUG] CF チェックを待機中…")
+                if DEBUG:
+                    print("[DEBUG] CF チェックを待機中…")
         else:
             raise RuntimeError("Cloudflare チェックが解除されずタイムアウトしました。")
 
-        # フォーム入力
+        # ログイン
         await page.fill('input[name="email"], input[type="email"]', FEEL_USER)
         await page.fill('input[name="password"]', FEEL_PASS)
         await page.click('button[type="submit"]')
         await page.wait_for_load_state("networkidle")
 
+        # 予約ページへ
         await page.goto(RESERVE_URL)
         await page.wait_for_load_state("networkidle")
         html = await page.content()
@@ -77,7 +79,8 @@ def has_slot(html: str, date_: str, time_: str) -> bool:
     soup = BeautifulSoup(html, "html.parser")
     day_div = soup.find("div", class_="days", string=lambda s: s and date_ in s)
     if not day_div:
-        if DEBUG: print(f"[DEBUG] {date_} 列なし")
+        if DEBUG:
+            print(f"[DEBUG] {date_} 列なし")
         return False
     column = day_div.find_parent("div", class_="content") or day_div
     for lesson in column.find_all("div", class_=re.compile(r"seat-(available|reserved)")):
