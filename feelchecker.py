@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-feelchecker.py – FEELCYCLE 予約監視 ＋ LINE 通知（Playwright, CF-wait）
+feelchecker.py – FEELCYCLE 予約監視 ＋ LINE 通知（Playwright, CF-wait, UA偽装, 7秒wait）
 """
 import asyncio, csv, os, re, sys, time
 from typing import List, Tuple
@@ -40,10 +40,14 @@ TIME_RE     = re.compile(r"\d{2}:\d{2}")
 
 async def fetch_reserve_html() -> str:
     async with async_playwright() as p:
-        browser = await p.webkit.launch(headless=True)
+        # Chromium（Windows ChromeのUser-AgentでCloudflare対策）
+        browser = await p.chromium.launch(headless=True)
         ctx = await browser.new_context(
-            user_agent=("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
-                        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1")
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            )
         )
         page = await ctx.new_page()
         page.set_default_timeout(60_000)          # 60 s
@@ -67,6 +71,8 @@ async def fetch_reserve_html() -> str:
         await page.wait_for_load_state("networkidle")
 
         await page.goto(RESERVE_URL)
+        # ★ Cloudflare対策として7秒間待機
+        await page.wait_for_timeout(7000)  # 7秒待機
         await page.wait_for_load_state("networkidle")
         html = await page.content()
         await browser.close()
