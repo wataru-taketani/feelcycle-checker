@@ -1,29 +1,26 @@
 name: feelchecker
-
 on:
   workflow_dispatch:
   push:
-    paths:
-      - feelchecker.py
-      - .github/workflows/feelchecker.yml
+    branches: [main]
 
 jobs:
   run:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11.6"
+          python-version: '3.11.9'
 
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install playwright
-          playwright install
+          python -m playwright install --with-deps
 
       - name: Run feelchecker
         env:
@@ -32,4 +29,4 @@ jobs:
           SHEET_CSV: ${{ secrets.SHEET_CSV }}
           CH_ACCESS: ${{ secrets.CH_ACCESS }}
           DEBUG: "1"
-        run: python3 feelchecker.py
+        run: python feelchecker.py
