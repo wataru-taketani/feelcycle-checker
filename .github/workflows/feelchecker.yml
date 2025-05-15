@@ -2,13 +2,13 @@ name: feelchecker
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   run:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./
 
     steps:
       - name: Checkout repository
@@ -19,24 +19,18 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
+          python3.11 -m pip install --upgrade pip
           python3.11 -m pip install -r requirements.txt
-          npm install
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps
+          python3.11 -m playwright install
 
       - name: Run feelchecker.py
         env:
           FEEL_USER: ${{ secrets.FEEL_USER }}
           FEEL_PASS: ${{ secrets.FEEL_PASS }}
-          SHEET_CSV: ${{ secrets.SHEET_CSV }}
+          CHECKCYCLE: ${{ secrets.CHECKCYCLE }}
           CH_ACCESS: ${{ secrets.CH_ACCESS }}
-          DEBUG: 1
-        run: python3.11 feelchecker.py
+          DEBUG: "1"
+        run: |
+          python3.11 feelchecker.py
