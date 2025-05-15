@@ -6,7 +6,7 @@ on:
 
 jobs:
   run:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       # 1) ソース取得
@@ -21,7 +21,7 @@ jobs:
       - name: Install Python deps
         run: pip install -r requirements.txt
 
-      # 4) Playwright のブラウザ実体をインストール  ←★New
+      # 4) Playwright のブラウザ実体をインストール
       - name: Install Playwright browsers
         run: python -m playwright install --with-deps
 
