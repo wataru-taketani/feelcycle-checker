@@ -15,6 +15,8 @@ jobs:
       FEEL_PASS: ${{ secrets.FEEL_PASS }}
       SHEET_CSV: ${{ secrets.SHEET_CSV }}
       CH_ACCESS: ${{ secrets.CH_ACCESS }}
+      DEBUG: "1"
+
 
     steps:
       - uses: actions/checkout@v4
@@ -48,6 +50,3 @@ jobs:
       # 本処理
       - name: Run feelchecker
         run: python feelchecker.py
-
-      env:
-        DEBUG: "1"
