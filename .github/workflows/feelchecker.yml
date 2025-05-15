@@ -1,44 +1,31 @@
 name: feelchecker
 
 on:
-  schedule:
-    # 15 分ごとに実行
-    - cron:  '*/15 * * * *'
-  workflow_dispatch:
+  workflow_dispatch:  # 手動実行用トリガー
 
 jobs:
-  run:
-    runs-on: ubuntu-22.04
-
-    env:
-      FEEL_USER:  ${{ secrets.FEEL_USER }}
-      FEEL_PASS:  ${{ secrets.FEEL_PASS }}
-      SHEET_CSV:  ${{ secrets.SHEET_CSV }}
-      CH_ACCESS:  ${{ secrets.CH_ACCESS }}
-      DEBUG:      "1"          # ← 0 にすると静かになります
-
+  run-checker:
+    runs-on: self-hosted  # 自前ランナーで実行
     steps:
-      # 1) リポジトリ取得
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      # 2) Python セットアップ
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # 3) 依存ライブラリをインストール
       - name: Install dependencies
         run: |
-          pip install --no-cache-dir playwright beautifulsoup4 httpx
-          playwright install --with-deps webkit
+          pip install --upgrade pip
+          pip install -r requirements.txt  # 必要な場合のみ
 
-      # 4) Debug：CSV の先頭 2 行を確認
-      - name: Check CSV head
+      - name: Run feelchecker.py
         run: |
-          echo "== CSV head =="
-          curl -sL "$SHEET_CSV" | head -n 2 || true
-          echo "=============="
-
-      # 5) feelchecker 実行
-      - name: Run feelchecker
-        run: python feelchecker.py
+          python feelchecker.py
+        env:
+          FEEL_USER: ${{ secrets.FEEL_USER }}
+          FEEL_PASS: ${{ secrets.FEEL_PASS }}
+          SHEET_CSV: ${{ secrets.SHEET_CSV }}
+          CH_ACCESS: ${{ secrets.CH_ACCESS }}
+          DEBUG: 1
