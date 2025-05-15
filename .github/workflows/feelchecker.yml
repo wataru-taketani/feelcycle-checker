@@ -1,3 +1,7 @@
+- name: Check CSV head
+  run: |
+    head -n 2 <(curl -sL "$SHEET_CSV")
+
 name: feelchecker
 on:
   schedule:
