@@ -1,74 +1,60 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-feelchecker.py  (4-列シート版)
--------------------------------------------------------------
-Google スプレッドシート (CSV) の監視条件
-   date | time | studio | userId
-を読み取り、FEELCYCLE 予約サイトを自動巡回。
-空席 (seat-available) を見つけたら、その行の userId へ
-LINE Push 通知を送る。
-
-・Playwright 1.44 系 / Python ≥ 3.10
-・requirements.txt
-    playwright==1.44.0
-    httpx>=0.26
+feelchecker.py  (debug 版：ヒット件数を表示)
+Google スプレッドシート
+  date | time | studio | userId
+を読み取り、空席があれば userId へ LINE Push。
 """
 
 import asyncio, csv, io, os, sys, httpx
 from playwright.async_api import async_playwright, TimeoutError as PWTimeout
 
-# ─────── 0. 環境変数（GitHub Secrets で設定） ──────────────────────────
-FEEL_USER = os.getenv("FEEL_USER")          # FEELCYCLE ID
-FEEL_PASS = os.getenv("FEEL_PASS")          # FEELCYCLE パスワード
-SHEET_CSV = os.getenv("SHEET_CSV")          # 公開 CSV URL
-CH_ACCESS = os.getenv("CH_ACCESS")          # LINE チャネルアクセストークン(長期)
+# ─── 環境変数（GitHub Secrets） ──────────────────────────────────────
+FEEL_USER = os.getenv("FEEL_USER")
+FEEL_PASS = os.getenv("FEEL_PASS")
+SHEET_CSV = os.getenv("SHEET_CSV")
+CH_ACCESS = os.getenv("CH_ACCESS")
 
-if not all([FEEL_USER, FEEL_PASS, SHEET_CSV, CH_ACCESS]):
-    print("環境変数が不足しています。Secrets を確認してください。")
-    sys.exit(1)
+for k, v in {"FEEL_USER":FEEL_USER,"FEEL_PASS":FEEL_PASS,
+             "SHEET_CSV":SHEET_CSV,"CH_ACCESS":CH_ACCESS}.items():
+    if not v:
+        print(f"環境変数 {k} がありません"); sys.exit(1)
 
-# ─────── 1. シート読み込み（date,time,studio,userId の4列） ──────────────
+# ─── 1. 監視リストをロード ────────────────────────────────────────────
 def load_targets():
-    try:
-        csv_txt = httpx.get(SHEET_CSV, timeout=10).text
-    except Exception as e:
-        print("シート取得失敗:", e); sys.exit(1)
-
+    csv_txt = httpx.get(SHEET_CSV, timeout=10).text
     rows = list(csv.DictReader(io.StringIO(csv_txt)))
-    # 必須4項目が埋まっている行だけ残す
     return [r for r in rows if all(r.get(k) for k in ("date","time","studio","userId"))]
 
 TARGETS = load_targets()
 if not TARGETS:
-    print("監視行が 0 件です。シートを確認してください。")
-    sys.exit(0)
+    print("監視対象がありません"); sys.exit(0)
 
-# ─────── 2. LINE Push 通知関数（ユーザーごと） ───────────────────────────
+# ─── 2. LINE Push ────────────────────────────────────────────────────
 async def notify(user_id: str, message: str):
-    headers = {
-        "Authorization": f"Bearer {CH_ACCESS}",
-        "Content-Type":  "application/json"
-    }
-    payload = { "to": user_id,
-                "messages": [{ "type": "text", "text": message }] }
-
+    headers = {"Authorization": f"Bearer {CH_ACCESS}",
+               "Content-Type":  "application/json"}
+    payload = {"to": user_id,
+               "messages":[{"type":"text","text": message}]}
     async with httpx.AsyncClient(timeout=10) as cli:
         r = await cli.post("https://api.line.me/v2/bot/message/push",
                            headers=headers, json=payload)
     if r.status_code != 200:
-        print("LINE通知エラー:", r.text)
+        print("LINE送信エラー:", r.text)
 
-# ─────── 3. Playwright メイン処理 ──────────────────────────────────────
+# ─── 3. Playwright 本体 ─────────────────────────────────────────────
 RESERVE_URL = "https://m.feelcycle.com/reserve?type=filter"
 
 async def run():
+    hits = 0   # 🔴 ヒット件数カウンタ
+
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
         context = await browser.new_context()
         page    = await context.new_page()
 
-        # 3-A  ログイン
+        # 3-A ログイン
         await page.goto("https://m.feelcycle.com/login", timeout=30000)
         await page.fill('input[name="email"]', FEEL_USER)
         await page.fill('input[name="password"]', FEEL_PASS)
@@ -76,56 +62,47 @@ async def run():
         try:
             await page.wait_for_selector("text=レッスン予約", timeout=15000)
         except PWTimeout:
-            print("ログインに失敗しました。ID/PW を確認してください。"); return
+            print("ログイン失敗"); return
 
-        # 3-B  予約ページ表示
+        # 3-B 予約ページ
         await page.goto(RESERVE_URL, timeout=30000)
         await page.wait_for_selector("#shujikuTab", timeout=10000)
 
-        # 3-C  監視行を順にチェック
+        # 3-C 監視ループ
         for t in TARGETS:
-            date   = t["date"].strip()        # 例: 5/22
-            time   = t["time"].strip()        # 例: 11:30
-            studio = t["studio"].strip()      # 例: 銀座
-            userId = t["userId"].strip()
+            date, time, studio, userId = [t[k].strip() for k in
+                                          ("date","time","studio","userId")]
 
-            # (1) スタジオタブを選択
-            tabs = await page.query_selector_all("#shujikuTab .address_item")
-            for tab in tabs:
-                name = await (await tab.query_selector(".main")).inner_text()
-                if studio in name:
+            # スタジオタブ選択
+            for tab in await page.query_selector_all("#shujikuTab .address_item"):
+                if studio in await (await tab.query_selector(".main")).inner_text():
                     if "active" not in (await tab.get_attribute("class")):
-                        await tab.click()
-                        await page.wait_for_timeout(800)  # 軽く待つ
+                        await tab.click(); await page.wait_for_timeout(500)
                     break
-            else:
-                print(f"スタジオ '{studio}' が見つかりません"); continue
+            else: continue  # スタジオ見つからず
 
-            # (2) 日付列を見つける
+            # 日付列 index
             days = await page.eval_on_selector_all(
                 "#scrollHeader .days",
                 "els => els.map(e => e.textContent.trim())")
             try:
-                idx = next(i for i,d in enumerate(days) if d.startswith(date))
+                col = (await page.query_selector_all(".sc_list"))[
+                        next(i for i,d in enumerate(days) if d.startswith(date))]
             except StopIteration:
-                # その週に日付が無い
-                continue
+                continue  # その週に列なし
 
-            col = (await page.query_selector_all(".sc_list"))[idx]
-
-            # (3) 空席カードを探す
-            cards = await col.query_selector_all("div.lesson.seat-available")
-            for card in cards:
-                t_elem  = await card.query_selector(".time")
-                time_txt = (await t_elem.inner_text()).strip()  # "11:30 - 12:15"
+            # 空席検索
+            for card in await col.query_selector_all("div.lesson.seat-available"):
+                time_txt = (await (await card.query_selector(".time")).inner_text()).strip()
                 if time_txt.startswith(time):
-                    message = f"🔔 空き発見！\n{date} {time_txt} @{studio}"
-                    await notify(userId, message)
-                   hits += 1
-                    break   # 1件見つけたら次ターゲットへ
-            print("通知件数:", hits)
-        await browser.close()
+                    msg = f"🔔 空き発見！\n{date} {time_txt} @{studio}"
+                    await notify(userId, msg)
+                    hits += 1
+                    break
 
-# ─────── 4. エントリーポイント ────────────────────────────────────────
+        await browser.close()
+    print("通知件数:", hits)   # 🔵 GitHub Actions ログに出力
+
+# ─── 4. 実行 ──────────────────────────────────────────────────────
 if __name__ == "__main__":
     asyncio.run(run())
