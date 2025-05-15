@@ -7,6 +7,9 @@ jobs:
   run-checker:
     runs-on: ubuntu-latest
 
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
@@ -29,7 +32,7 @@ jobs:
     - name: Install @playwright/test
       run: npm install @playwright/test
 
-    - name: Install Playwright browsers (fresh install, no cache)
+    - name: Install Playwright browsers (force path)
       run: npx playwright install
 
     - name: Run feelchecker.py
