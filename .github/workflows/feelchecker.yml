@@ -21,15 +21,15 @@ jobs:
         python3.11 -m pip install --upgrade pip
         python3.11 -m pip install -r requirements.txt
 
-    - name: Cache Playwright browsers
-      uses: actions/cache@v3
+    - name: Install Node and Playwright
+      uses: actions/setup-node@v3
       with:
-        path: ~/.cache/ms-playwright
-        key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-playwright-
+        node-version: '20'
 
-    - name: Install Playwright browsers
+    - name: Install @playwright/test
+      run: npm install @playwright/test
+
+    - name: Install Playwright browsers (fresh install, no cache)
       run: npx playwright install
 
     - name: Run feelchecker.py
