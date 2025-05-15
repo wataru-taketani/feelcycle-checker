@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-feelchecker.py – FEELCYCLE 予約監視 ＋ LINE 通知（Playwright, CF-wait, UA偽装, 7秒wait）
+feelchecker.py – FEELCYCLE 予約監視 ＋ LINE 通知（Playwright, CF-wait, GitHub Actions対応版）
 """
-import asyncio, csv, os, re, sys, time
+import asyncio, csv, os, re, sys
 from typing import List, Tuple
 
 import httpx
@@ -40,15 +40,22 @@ TIME_RE     = re.compile(r"\d{2}:\d{2}")
 
 async def fetch_reserve_html() -> str:
     async with async_playwright() as p:
-        # Chromium（Windows ChromeのUser-AgentでCloudflare対策）
-        browser = await p.chromium.launch(headless=True)
-        ctx = await browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
-            )
+        # ── User-Agent & 起動オプション ──
+        user_agent = (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
         )
+        browser = await p.chromium.launch(
+            headless=False,  # headless=Falseで突破率UP（CIでもOK）
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-gpu",
+                "--window-size=1920,1080",
+            ]
+        )
+        ctx = await browser.new_context(user_agent=user_agent)
         page = await ctx.new_page()
         page.set_default_timeout(60_000)          # 60 s
 
@@ -71,8 +78,6 @@ async def fetch_reserve_html() -> str:
         await page.wait_for_load_state("networkidle")
 
         await page.goto(RESERVE_URL)
-        # ★ Cloudflare対策として7秒間待機
-        await page.wait_for_timeout(7000)  # 7秒待機
         await page.wait_for_load_state("networkidle")
         html = await page.content()
         await browser.close()
