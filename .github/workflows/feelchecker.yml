@@ -1,10 +1,13 @@
 name: feelchecker
 
+# ────────────── トリガー ──────────────
 on:
   schedule:
-    - cron: '*/15 * * * *'   # 15 分ごと
-  workflow_dispatch:          # 手動実行
+    # 15 分おき
+    - cron: '*/15 * * * *'
+  workflow_dispatch:       # 手動実行
 
+# ────────────── ジョブ ──────────────
 jobs:
   run:
     runs-on: ubuntu-22.04
@@ -18,15 +21,15 @@ jobs:
         with:
           python-version: '3.10'
 
-      # ③ SHEET_CSV の長さ & 生文字列を確認（マスク済み）
+      # ③ SHEET_CSV の長さ & 制御文字を確認（デバッグ用）
       - name: Debug SHEET_CSV
         shell: bash
         run: |
-          echo "len=$(echo -n "$SHEET_CSV" | wc -c) bytes"
-          printf 'hex ='
+          echo "▶︎ len=$(echo -n "$SHEET_CSV" | wc -c) bytes"
+          printf '▶︎ hex ='
           echo -n "$SHEET_CSV" | od -An -tx1 | head -n 1
 
-      # ④ CSV 先頭 2 行を表示
+      # ④ CSV 先頭 2 行を表示（取得チェック）
       - name: Check CSV head
         shell: bash
         run: |
@@ -34,7 +37,7 @@ jobs:
           curl -sL "$SHEET_CSV" | head -n 2
           echo "================"
 
-      # ⑤ 依存ライブラリ + Playwright
+      # ⑤ 依存ライブラリ + Playwright ブラウザ
       - name: Install Python deps & Playwright browsers
         run: |
           python -m pip install -r requirements.txt
@@ -44,7 +47,7 @@ jobs:
       - name: Run feelchecker
         run: python feelchecker.py
         env:
-          FEEL_USER:   ${{ secrets.FEEL_USER }}
-          FEEL_PASS:   ${{ secrets.FEEL_PASS }}
-          SHEET_CSV:   ${{ secrets.SHEET_CSV }}
-          CH_ACCESS:   ${{ secrets.CH_ACCESS }}
+          FEEL_USER: ${{ secrets.FEEL_USER }}
+          FEEL_PASS: ${{ secrets.FEEL_PASS }}
+          SHEET_CSV: ${{ secrets.SHEET_CSV }}
+          CH_ACCESS: ${{ secrets.CH_ACCESS }}
